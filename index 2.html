@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f7f7fb">
+<title>歌詞メモ帳</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#222436;background:#f7f7fb}
+*{box-sizing:border-box}body{margin:0;padding:24px 14px 48px}
+main{max-width:760px;margin:auto}
+header{padding:24px 4px 20px}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:#6d63c8;font-weight:700}
+h1{font-size:clamp(28px,6vw,40px);margin:8px 0 6px}
+.subtitle{color:#686b7b;margin:0;line-height:1.6}
+.panel{background:white;border:1px solid #e5e5ef;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 5px 18px #29294a08}
+label{display:block;font-size:14px;font-weight:650;margin:12px 0 7px}
+input,textarea{width:100%;font:inherit;border:1px solid #dcdce8;border-radius:11px;padding:12px;background:#fff;color:#222436}
+textarea{min-height:210px;resize:vertical;line-height:1.7}
+button{font:inherit;border:0;border-radius:11px;padding:11px 15px;cursor:pointer}
+.primary{background:#6558d3;color:white;font-weight:700}
+.secondary{background:#efeff8;color:#38354e}
+.danger{background:#fff0f0;color:#a22}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.search{margin-bottom:12px}
+.song{padding:14px;border:1px solid #e7e7f0;border-radius:12px;margin-top:9px;display:flex;align-items:center;gap:10px}
+.song-main{min-width:0;flex:1;cursor:pointer}
+.song-title{font-weight:700;overflow-wrap:anywhere}
+.song-preview{font-size:13px;color:#77798a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}
+.song button{padding:8px 10px}
+.notice{font-size:12px;line-height:1.6;color:#77798a}
+.empty{padding:20px 4px;color:#77798a;text-align:center}
+@media(min-width:600px){body{padding-top:40px}.panel{padding:24px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="eyebrow">PERSONAL MUSIC NOTES</div>
+  <h1>🎵 歌詞メモ帳</h1>
+  <p class="subtitle">曲名で探して、メモをすぐに開ける場所。</p>
+</header>
+<section class="panel">
+  <h2 id="formHeading" style="margin:0;font-size:20px">曲を追加</h2>
+  <form id="memoForm">
+    <label for="title">曲名</label>
+    <input id="title" maxlength="200" placeholder="曲名を入力" required>
+    <label for="lyrics">歌詞メモ</label>
+    <textarea id="lyrics" placeholder="ここに自分の歌詞メモを入力…" required></textarea>
+    <div class="actions">
+      <button class="primary" type="submit">保存する</button>
+      <button class="secondary" type="button" id="cancelEdit" hidden>編集をやめる</button>
+    </div>
+  </form>
+</section>
+<section class="panel">
+  <h2 style="margin:0 0 14px;font-size:20px">保存した曲</h2>
+  <input class="search" id="search" placeholder="🔎 曲名で検索">
+  <div id="songList"></div>
+</section>
+<p class="notice">試作版：この段階では、このブラウザ内だけに保存されます。Googleログイン・スプレッドシート連携・端末間同期はまだ設定されていません。公開前に認証と安全な保存先を設定します。</p>
+</main>
+<script>
+const KEY='lyricMemoPrototype_v1';
+let memos=JSON.parse(localStorage.getItem(KEY)||'[]');
+let editingId=null;
+const $=id=>document.getElementById(id);
+function persist(){localStorage.setItem(KEY,JSON.stringify(memos));render()}
+function resetForm(){editingId=null;$('memoForm').reset();$('formHeading').textContent='曲を追加';$('cancelEdit').hidden=true}
+function render(){
+ const q=$('search').value.trim().toLowerCase();
+ const list=$('songList');list.innerHTML='';
+ const filtered=memos.filter(m=>m.title.toLowerCase().includes(q)).sort((a,b)=>a.title.localeCompare(b.title,'ja'));
+ if(!filtered.length){list.innerHTML='<div class="empty">'+(memos.length?'一致する曲がないよ。':'まだ曲がないよ。上から追加してね。')+'</div>';return}
+ filtered.forEach(m=>{
+  const row=document.createElement('div');row.className='song';
+  const info=document.createElement('div');info.className='song-main';info.tabIndex=0;info.setAttribute('role','button');
+  const title=document.createElement('div');title.className='song-title';title.textContent=m.title;
+  const preview=document.createElement('div');preview.className='song-preview';preview.textContent=m.lyrics.replace(/\s+/g,' ').slice(0,90);
+  info.append(title,preview);info.onclick=()=>edit(m.id);info.onkeydown=e=>{if(e.key==='Enter')edit(m.id)};
+  const editBtn=document.createElement('button');editBtn.className='secondary';editBtn.textContent='開く';editBtn.onclick=()=>edit(m.id);
+  const delBtn=document.createElement('button');delBtn.className='danger';delBtn.textContent='削除';delBtn.onclick=()=>{if(confirm('「'+m.title+'」を削除する？')){memos=memos.filter(x=>x.id!==m.id);if(editingId===m.id)resetForm();persist()}};
+  row.append(info,editBtn,delBtn);list.append(row)
+ })
+}
+function edit(id){const m=memos.find(x=>x.id===id);if(!m)return;editingId=id;$('title').value=m.title;$('lyrics').value=m.lyrics;$('formHeading').textContent='曲を編集';$('cancelEdit').hidden=false;window.scrollTo({top:0,behavior:'smooth'})}
+$('memoForm').addEventListener('submit',e=>{
+ e.preventDefault();const title=$('title').value.trim(),lyrics=$('lyrics').value;
+ if(!title||!lyrics.trim())return;
+ if(editingId){const m=memos.find(x=>x.id===editingId);if(m){m.title=title;m.lyrics=lyrics;m.updatedAt=new Date().toISOString()}}
+ else memos.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),title,lyrics,createdAt:new Date().toISOString()});
+ resetForm();persist()
+});
+$('cancelEdit').onclick=resetForm;
+$('search').addEventListener('input',render);
+render();
+</script>
+</body>
+</html>
